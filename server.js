@@ -3,7 +3,7 @@ import fetch from "node-fetch";
 import { google } from "googleapis";
 import dotenv from "dotenv";
 import cors from "cors"
-app.user(cors({origin:'*'}));
+app.use(cors({origin:'*'}));
 
 dotenv.config();
 const app = express();
