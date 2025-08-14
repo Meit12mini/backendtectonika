@@ -3,10 +3,11 @@ import fetch from "node-fetch";
 import { google } from "googleapis";
 import dotenv from "dotenv";
 import cors from "cors"
-app.use(cors({origin:'*'}));
+
 
 dotenv.config();
 const app = express();
+app.use(cors({origin:'*'}));
 app.use(express.json());
 
 // Проверка reCAPTCHA
