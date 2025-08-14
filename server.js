@@ -1,4 +1,4 @@
-import express from "express";
+import express, { response } from "express";
 import fetch from "node-fetch";
 import { google } from "googleapis";
 import dotenv from "dotenv";
@@ -18,6 +18,7 @@ async function verifyRecaptcha(token) {
     body: `secret=${process.env.RECAPTCHA_SECRET}&response=${token}`
   });
   const data = await res.json();
+  console.log('reCAPTCHA',data)
   return data.success && data.score > 0.5;
 }
 
@@ -43,7 +44,7 @@ async function sendTelegramMessage(text) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chat_id: process.env.TG_CHAT_ID, text, parse_mode: "Markdown" })
   });
-  const data = await res.json();
+  const data = await response.json();
   if(!data.ok){
     console.error('Telegram error', data);
   }
