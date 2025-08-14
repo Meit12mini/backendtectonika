@@ -16,10 +16,10 @@ async function verifyRecaptcha(token) {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: `secret=${process.env.RECAPTCHA_SECRET}&response=${token}`
-  }).then(r => r.json());
+  });
   const data = await res.json();
   console.log('reCAPTCHA',data)
-  return data.success && data.score > 0.5;
+  return data.success && data.score > 1;
 }
 
 // Google Sheets API
