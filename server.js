@@ -19,7 +19,7 @@ async function verifyRecaptcha(token) {
   });
   const data = await res.json();
   console.log('reCAPTCHA',data)
-  return data.success && data.score > 1;
+  return data.success && data.score > 0;
 }
 
 // Google Sheets API
