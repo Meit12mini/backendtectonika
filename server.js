@@ -1,7 +1,11 @@
 import express from "express";
 import fetch from "node-fetch";
+import dotenv from "dotenv";
+import cors from "cors";
 
+dotenv.config();
 const app = express();
+app.use(cors());
 app.use(express.json());
 
 const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET_KEY; // ключ из Google
