@@ -70,7 +70,7 @@ app.post("/api/lead", async (req, res) => {
   console.log('ggggg')
   try {
     const { googleSheetRow, telegramMessage, clientMessage, leadStatus, token } = req.body;
-
+    console.log('ggg', token)
     if (!(await verifyRecaptcha(token))) {
       return res.status(400).json({ error: "reCAPTCHA failed" });
     }
