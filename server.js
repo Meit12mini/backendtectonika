@@ -43,6 +43,10 @@ async function sendTelegramMessage(text) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chat_id: process.env.TG_CHAT_ID, text, parse_mode: "Markdown" })
   });
+  const data = await res.json();
+  if(!data.ok){
+    console.error('Telegram error', data);
+  }
 }
 
 // WhatsApp (пример с Wazzup)
@@ -63,6 +67,7 @@ async function sendWhatsApp(phone, message) {
 }
 
 app.post("/api/lead", async (req, res) => {
+  console.log('ggggg')
   try {
     const { googleSheetRow, telegramMessage, clientMessage, leadStatus, token } = req.body;
 
