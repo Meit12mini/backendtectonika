@@ -13,6 +13,7 @@ const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET_KEY; // ключ из Goog
 // 1) Проверка капчи
 app.post("/api/verify-captcha", async (req, res) => {
   const { token } = req.body;
+  console.log("пенееек");
   if (!token) {
     return res.status(400).json({ success: false, error: "Token is required" });
   }
