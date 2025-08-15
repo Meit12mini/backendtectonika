@@ -8,7 +8,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET_KEY; // ключ из Google
+const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET; // ключ из Google
 
 // 1) Проверка капчи
 app.post("/api/verify-captcha", async (req, res) => {
