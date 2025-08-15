@@ -8,7 +8,7 @@ dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json());
-const MY_WHATSAPP_NUMBER = '79145126162';
+
 
 import { Client } from 'whatsapp-web.js';
 import qrcode from 'qrcode-terminal';
@@ -25,6 +25,14 @@ const waClient = new Client({
   session: sessionData
 });
 
+let waReady = false;
+
+waClient.on('ready', () => {
+  waReady = true;
+  console.log('WhatsApp готов к отправке сообщений!');
+});
+
+
 waClient.on('qr', qr => {
   console.log('Сканируй этот QR код WhatsApp:');
   qrcode.generate(qr, { small: true });
@@ -38,6 +46,7 @@ waClient.on('authenticated', session => {
 waClient.on('ready', () => {
   console.log('WhatsApp готов к отправке сообщений!');
 });
+
 
 waClient.initialize();
 
@@ -114,7 +123,9 @@ app.post('/api/lead', async (req, res) => {
         console.error('Ошибка отправки в Telegram:', tgError);
       }
     }
-   if (waClient) {
+  const MY_WHATSAPP_NUMBER = '79145126162';
+
+if (waClient && waReady) {
   try {
     await waClient.sendMessage(
       `${MY_WHATSAPP_NUMBER}@c.us`,
@@ -124,6 +135,8 @@ app.post('/api/lead', async (req, res) => {
   } catch (waError) {
     console.error('Ошибка отправки в WhatsApp:', waError);
   }
+} else {
+  console.error('WhatsApp клиент ещё не готов, сообщение не отправлено');
 }
     res.json({ 
       success: true, 
