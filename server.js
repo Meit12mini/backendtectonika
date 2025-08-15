@@ -1,17 +1,18 @@
-require('dotenv').config();
-const express = require('express');
-const fetch = require('node-fetch');
-const cors = require('cors');
-const { Telegraf } = require('telegraf');
+import dotenv from 'dotenv';
+import express from 'express';
+import fetch from 'node-fetch';
+import cors from 'cors';
+import { Telegraf } from 'telegraf';
 
+dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 // Конфигурация
 const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET;
-const TELEGRAM_BOT_TOKEN = process.env.TG_TOKEN;
-const TELEGRAM_CHAT_ID = process.env.TG_CHAT_ID;
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 // Инициализация Telegram бота
 const bot = TELEGRAM_BOT_TOKEN ? new Telegraf(TELEGRAM_BOT_TOKEN) : null;
@@ -48,7 +49,6 @@ app.post('/api/verify-captcha', async (req, res) => {
 });
 
 // 2) Приём данных формы с обработкой лида
-// 2) Приём данных формы с обработкой лида
 app.post('/api/lead', async (req, res) => {
   try {
     const formData = req.body;
@@ -57,14 +57,6 @@ app.post('/api/lead', async (req, res) => {
     if (!formData.answers || !formData.phone) {
       console.log('Получен служебный запрос без данных лида - пропускаем');
       return res.json({ success: true, message: 'Служебный запрос обработан' });
-    }
-
-    // Проверка обязательных полей для реальных лидов
-    if (typeof formData.answers !== 'object' || !formData.phone.trim()) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Invalid lead data: answers and phone are required' 
-      });
     }
 
     // Обработка лида
@@ -91,21 +83,15 @@ app.post('/api/lead', async (req, res) => {
       }
     }
 
-    // Ответ для клиента
     res.json({ 
       success: true, 
       message: 'Лид сохранён',
       leadStatus: processedLead.leadStatus,
       clientMessage: processedLead.clientMessage
     });
-
   } catch (err) {
-    console.error('Ошибка обработки лида:', err);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to process lead',
-      details: err.message 
-    });
+    console.error(err);
+    res.status(500).json({ success: false, error: 'Failed to save lead' });
   }
 });
 
@@ -113,7 +99,6 @@ app.post('/api/lead', async (req, res) => {
 function processLead(leadData) {
   const { answers, phone } = leadData;
   
-  // Определяем статус лида
   const budget = answers['5'];
   const timeline = answers['6'];
   
@@ -133,7 +118,6 @@ function processLead(leadData) {
     leadStatus = '❄️ ХОЛОДНЫЙ';
   }
   
-  // Формируем сообщение для Telegram
   const telegramMessage = `
 📌 *Новый лид (${leadStatus})* 📌
 
@@ -150,7 +134,6 @@ function processLead(leadData) {
 *Рекомендации:* ${getActionRecommendation(leadStatus)}
   `.trim();
   
-  // Сообщение для клиента
   const clientMessage = leadStatus === '🔥 ГОРЯЧИЙ' 
     ? 'Здравствуйте! Ваша заявка получила VIP-статус. Наш лучший специалист уже изучает ваши ответы и свяжется с вами в течение 15 минут для детального обсуждения проекта. Ваш персональный каталог и скидка уже формируются! С уважением, команда «Тектоника».'
     : 'Здравствуйте! Мы получили вашу заявку, спасибо за интерес к нашей компании! Наш менеджер свяжется с вами в ближайшее рабочее время для консультации. А пока мы готовим для вас смету и каталог проектов. С уважением, команда «Тектоника».';
@@ -162,7 +145,6 @@ function processLead(leadData) {
   };
 }
 
-// Рекомендации по обработке лида
 function getActionRecommendation(status) {
   switch(status) {
     case '🔥 ГОРЯЧИЙ':
@@ -176,7 +158,6 @@ function getActionRecommendation(status) {
   }
 }
 
-// Запуск сервера
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
