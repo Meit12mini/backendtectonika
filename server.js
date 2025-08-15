@@ -20,17 +20,24 @@ app.post("/api/verify-captcha", async (req, res) => {
 
   try {
     const verifyRes = await fetch(
-      `https://www.google.com/recaptcha/api/siteverify?secret=${RECAPTCHA_SECRET}&response=${token}`,
-      { method: "POST" }
+      "https://www.google.com/recaptcha/api/siteverify",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `secret=${RECAPTCHA_SECRET}&response=${token}`
+      }
     );
 
     const data = await verifyRes.json();
+    console.log("Результат проверки капчи:", data);
+
     if (!data.success) {
       return res.status(400).json({ success: false, error: "Invalid captcha" });
     }
 
-    res.json({ success: true });
+    res.json({ success: true, score: data.score, action: data.action });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ success: false, error: "Captcha verification failed" });
   }
 });
