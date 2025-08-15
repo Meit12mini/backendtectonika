@@ -8,47 +8,41 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET_KEY; // ключ из Google
+// Проверка reCAPTCHA
+async function verifyRecaptcha(token) {
+  const res = await fetch(`https://www.google.com/recaptcha/api/siteverify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `secret=${process.env.RECAPTCHA_SECRET}&response=${token}`
+  });
+  const data = await res.json();
+  return data.success && data.score > 0.5;
+}
 
-// 1) Проверка капчи
-app.post("/api/verify-captcha", async (req, res) => {
-  const { token } = req.body;
-  if (!token) {
-    return res.status(400).json({ success: false, error: "Token is required" });
-  }
-
-  try {
-    const verifyRes = await fetch(
-      `https://www.google.com/recaptcha/api/siteverify?secret=${RECAPTCHA_SECRET}&response=${token}`,
-      { method: "POST" }
-    );
-
-    const data = await verifyRes.json();
-    if (!data.success) {
-      return res.status(400).json({ success: false, error: "Invalid captcha" });
-    }
-
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ success: false, error: "Captcha verification failed" });
-  }
-});
-
-// 2) Приём данных формы
+// 1. Проверка капчи
 app.post("/api/lead", async (req, res) => {
-  try {
-    const formData = req.body;
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: "Token is required" });
 
-    // Здесь можно дополнительно проверять капчу, если хочешь:
-    // if (!formData.token) { return res.status(400).json({ error: "Token required" }); }
+  const valid = await verifyRecaptcha(token);
+  if (!valid) return res.status(400).json({ error: "reCAPTCHA failed" });
 
-    // Логика сохранения в базу:
-    console.log("Новый лид:", formData);
-
-    res.json({ success: true, message: "Лид сохранён" });
-  } catch (err) {
-    res.status(500).json({ success: false, error: "Failed to save lead" });
-  }
+  res.json({ success: true, message: "Token valid" });
 });
 
-app.listen(3000, () => console.log("Server running on port 3000"));
+// 2. Приём данных лида
+app.post("/api/submit", async (req, res) => {
+  const leadData = req.body;
+
+  if (!leadData || Object.keys(leadData).length === 0) {
+    return res.status(400).json({ error: "Нет данных лида" });
+  }
+
+  // Тут ты можешь сохранить в БД, отправить в Telegram и т.д.
+  console.log("Новый лид:", leadData);
+
+  res.json({ success: true, message: "Лид получен" });
+});
+
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => console.log(`Backend running on http://localhost:${PORT}`));
