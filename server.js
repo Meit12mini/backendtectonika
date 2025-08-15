@@ -9,6 +9,37 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+import { Client } from 'whatsapp-web.js';
+import qrcode from 'qrcode-terminal';
+import fs from 'fs';
+
+// Файл сессии (чтобы не сканировать QR каждый раз)
+const SESSION_FILE_PATH = './wa-session.json';
+let sessionData = null;
+if (fs.existsSync(SESSION_FILE_PATH)) {
+  sessionData = JSON.parse(fs.readFileSync(SESSION_FILE_PATH, 'utf-8'));
+}
+
+const waClient = new Client({
+  session: sessionData
+});
+
+waClient.on('qr', qr => {
+  console.log('Сканируй этот QR код WhatsApp:');
+  qrcode.generate(qr, { small: true });
+});
+
+waClient.on('authenticated', session => {
+  console.log('WhatsApp авторизован!');
+  fs.writeFileSync(SESSION_FILE_PATH, JSON.stringify(session));
+});
+
+waClient.on('ready', () => {
+  console.log('WhatsApp готов к отправке сообщений!');
+});
+
+waClient.initialize();
+
 // Конфигурация
 const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -82,7 +113,17 @@ app.post('/api/lead', async (req, res) => {
         console.error('Ошибка отправки в Telegram:', tgError);
       }
     }
-
+    if (waClient) {
+  try {
+    await waClient.sendMessage(
+      `${formData.phone.replace(/\D/g, '')}@c.us`,
+      processedLead.telegramMessage
+    );
+    console.log('Уведомление отправлено в WhatsApp');
+  } catch (waError) {
+    console.error('Ошибка отправки в WhatsApp:', waError);
+  }
+}
     res.json({ 
       success: true, 
       message: 'Лид сохранён',
