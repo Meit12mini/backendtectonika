@@ -8,6 +8,7 @@ dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json());
+const MY_WHATSAPP_NUMBER = '79145126162';
 
 import { Client } from 'whatsapp-web.js';
 import qrcode from 'qrcode-terminal';
@@ -113,13 +114,13 @@ app.post('/api/lead', async (req, res) => {
         console.error('Ошибка отправки в Telegram:', tgError);
       }
     }
-    if (waClient) {
+   if (waClient) {
   try {
     await waClient.sendMessage(
-      `${formData.phone.replace(/\D/g, '')}@c.us`,
+      `${MY_WHATSAPP_NUMBER}@c.us`,
       processedLead.telegramMessage
     );
-    console.log('Уведомление отправлено в WhatsApp');
+    console.log('Уведомление отправлено в мой WhatsApp');
   } catch (waError) {
     console.error('Ошибка отправки в WhatsApp:', waError);
   }
