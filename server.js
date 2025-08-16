@@ -17,21 +17,27 @@ async function appendLeadToSheet(lead) {
   });
 
   const client = await auth.getClient();
-
   const sheets = google.sheets({ version: 'v4', auth: client });
 
-  const values = [
-    [
-      new Date().toLocaleString(),
-      lead.phone,
-      lead.answers['1'] || '',
-      lead.answers['2'] || '',
-      lead.answers['3'] || '',
-      lead.answers['4'] || '',
-      lead.answers['5'] || '',
-      lead.answers['6'] || '',
-    ]
-  ];
+  // Время по Якутску (UTC+9)
+  const yakutskTime = new Date().toLocaleString("ru-RU", {
+    timeZone: "Asia/Yakutsk",
+    hour12: false
+  });
+
+  // Телефон без +
+  const cleanPhone = lead.phone ? lead.phone.replace(/^\+/, "") : "";
+
+  const values = [[
+    yakutskTime,
+    cleanPhone,
+    lead.answers?.['1'] || '',
+    lead.answers?.['2'] || '',
+    lead.answers?.['3'] || '',
+    lead.answers?.['4'] || '',
+    lead.answers?.['5'] || '',
+    lead.answers?.['6'] || '',
+  ]];
 
   const res = await sheets.spreadsheets.values.append({
     spreadsheetId: process.env.GOOGLE_SHEETS_ID,
@@ -42,7 +48,6 @@ async function appendLeadToSheet(lead) {
 
   console.log('Новая строка добавлена в Google Sheets:', res.data.updates.updatedRange);
 }
-
 
 
 // -------------------- Telegram --------------------
@@ -198,8 +203,6 @@ function processLead(leadData) {
 4. Материал: ${answers['4']}
 5. Бюджет: ${answers['5']}
 6. Сроки: ${answers['6']}
-
-*Рекомендации:* ${getActionRecommendation(leadStatus)}
 `.trim();
 
     return {
@@ -208,18 +211,7 @@ function processLead(leadData) {
     };
 }
 
-function getActionRecommendation(status) {
-    switch (status) {
-        case '🔥 ГОРЯЧИЙ':
-            return 'Немедленно позвонить! Клиент готов к покупке в ближайшее время с высоким бюджетом.';
-        case '👍 ТЕПЛЫЙ':
-            return 'Позвонить в течение 2 часов. Клиент в среднесрочной перспективе с хорошим бюджетом.';
-        case '❄️ ХОЛОДНЫЙ':
-            return 'Отправить письмо с каталогом и позвонить на следующий день. Клиент на ранней стадии рассмотрения.';
-        default:
-            return 'Требуется дополнительный анализ.';
-    }
-}
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
