@@ -3,180 +3,193 @@ import express from 'express';
 import fetch from 'node-fetch';
 import cors from 'cors';
 import { Telegraf } from 'telegraf';
-
+import { google } from 'googleapis';
 dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+// -------------------- Google API sheets ----------------------
+async function appendLeadToSheet(lead) {
+  const auth = new google.auth.GoogleAuth({
+    keyFile: process.env.GOOGLE_SHEETS_CREDENTIALS,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  });
 
-import { Client } from 'whatsapp-web.js';
-import qrcode from 'qrcode-terminal';
-import fs from 'fs';
+  const client = await auth.getClient();
 
-// Файл сессии (чтобы не сканировать QR каждый раз)
-const SESSION_FILE_PATH = './wa-session.json';
-let sessionData = null;
-if (fs.existsSync(SESSION_FILE_PATH)) {
-  sessionData = JSON.parse(fs.readFileSync(SESSION_FILE_PATH, 'utf-8'));
+  const sheets = google.sheets({ version: 'v4', auth: client });
+
+  const values = [
+    [
+      new Date().toLocaleString(),
+      lead.phone,
+      lead.answers['1'] || '',
+      lead.answers['2'] || '',
+      lead.answers['3'] || '',
+      lead.answers['4'] || '',
+      lead.answers['5'] || '',
+      lead.answers['6'] || '',
+    ]
+  ];
+
+  const res = await sheets.spreadsheets.values.append({
+    spreadsheetId: process.env.GOOGLE_SHEETS_ID,
+    range: process.env.GOOGLE_SHEETS_RANGE,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values },
+  });
+
+  console.log('Новая строка добавлена в Google Sheets:', res.data.updates.updatedRange);
 }
 
-const waClient = new Client({
-  session: sessionData
-});
-
-let waReady = false;
-
-waClient.on('ready', () => {
-  waReady = true;
-  console.log('WhatsApp готов к отправке сообщений!');
-});
 
 
-waClient.on('qr', qr => {
-  console.log('Сканируй этот QR код WhatsApp:');
-  qrcode.generate(qr, { small: true });
-});
-
-waClient.on('authenticated', session => {
-  console.log('WhatsApp авторизован!');
-  fs.writeFileSync(SESSION_FILE_PATH, JSON.stringify(session));
-});
-
-waClient.on('ready', () => {
-  console.log('WhatsApp готов к отправке сообщений!');
-});
-
-
-waClient.initialize();
-
-// Конфигурация
+// -------------------- Telegram --------------------
 const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-// Инициализация Telegram бота
 const bot = TELEGRAM_BOT_TOKEN ? new Telegraf(TELEGRAM_BOT_TOKEN) : null;
 
-// 1) Проверка капчи
+// -------------------- API --------------------
 app.post('/api/verify-captcha', async (req, res) => {
-  const { token } = req.body;
-  
-  if (!token) {
-    return res.status(400).json({ success: false, error: 'Token is required' });
-  }
+    const { token } = req.body;
 
-  try {
-    const verifyRes = await fetch(
-      'https://www.google.com/recaptcha/api/siteverify',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `secret=${RECAPTCHA_SECRET}&response=${token}`
-      }
-    );
-
-    const data = await verifyRes.json();
-
-    if (!data.success) {
-      return res.status(400).json({ success: false, error: 'Invalid captcha' });
+    if (process.env.NODE_ENV === 'development') {
+        console.log('Локальная проверка капчи - пропускаем');
+        return res.json({ success: true, score: 1.0, action: 'local-test' });
     }
 
-    res.json({ success: true, score: data.score, action: data.action });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, error: 'Captcha verification failed' });
-  }
-});
-
-// 2) Приём данных формы с обработкой лида
-app.post('/api/lead', async (req, res) => {
-  try {
-    const formData = req.body;
-
-    // Игнорируем запросы без answers и phone (второй запрос)
-    if (!formData.answers || !formData.phone) {
-      console.log('Получен служебный запрос без данных лида - пропускаем');
-      return res.json({ success: true, message: 'Служебный запрос обработан' });
+    if (!token) {
+        return res.status(400).json({ success: false, error: 'Token is required' });
     }
 
-    // Обработка лида
-    const processedLead = processLead(formData);
-    
-    // Логирование в консоль
-    console.log('Новый лид:', {
-      phone: formData.phone,
-      status: processedLead.leadStatus,
-      answers: formData.answers
-    });
-
-    // Отправка в Telegram (если настроен бот)
-    if (bot && TELEGRAM_CHAT_ID) {
-      try {
-        await bot.telegram.sendMessage(
-          TELEGRAM_CHAT_ID, 
-          processedLead.telegramMessage,
-          { parse_mode: 'Markdown' }
+    try {
+        const verifyRes = await fetch(
+            'https://www.google.com/recaptcha/api/siteverify',
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `secret=${RECAPTCHA_SECRET}&response=${token}`
+            }
         );
-        console.log('Уведомление отправлено в Telegram');
-      } catch (tgError) {
-        console.error('Ошибка отправки в Telegram:', tgError);
-      }
-    }
-  const MY_WHATSAPP_NUMBER = '79145126162';
 
-if (waClient && waReady) {
-  try {
-    await waClient.sendMessage(
-      `${MY_WHATSAPP_NUMBER}@c.us`,
-      processedLead.telegramMessage
-    );
-    console.log('Уведомление отправлено в мой WhatsApp');
-  } catch (waError) {
-    console.error('Ошибка отправки в WhatsApp:', waError);
-  }
-} else {
-  console.error('WhatsApp клиент ещё не готов, сообщение не отправлено');
-}
-    res.json({ 
-      success: true, 
-      message: 'Лид сохранён',
-      leadStatus: processedLead.leadStatus,
-      clientMessage: processedLead.clientMessage
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, error: 'Failed to save lead' });
-  }
+        const data = await verifyRes.json();
+
+        if (!data.success) {
+            return res.status(400).json({ success: false, error: 'Invalid captcha' });
+        }
+
+        res.json({ success: true, score: data.score, action: data.action });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: 'Captcha verification failed' });
+    }
 });
 
-// Функция обработки лида
+app.post('/api/lead', async (req, res) => {
+    try {
+        const formData = req.body;
+
+        if (!formData.answers || !formData.phone) {
+            console.log('Получен служебный запрос без данных лида - пропускаем');
+            return res.json({ success: true, message: 'Служебный запрос обработан' });
+        }
+
+        const processedLead = processLead(formData);
+
+        console.log('Новый лид:', {
+            phone: formData.phone,
+            status: processedLead.leadStatus,
+            answers: formData.answers
+        });
+
+        // ---------------- Telegram ----------------
+        if (bot && TELEGRAM_CHAT_ID) {
+            try {
+                await bot.telegram.sendMessage(
+                    TELEGRAM_CHAT_ID,
+                    processedLead.telegramMessage,
+                    { parse_mode: 'Markdown' }
+                );
+                console.log('Уведомление отправлено в Telegram');
+            } catch (tgError) {
+                console.error('Ошибка отправки в Telegram:', tgError);
+            }
+        }
+
+        // ---------------- WhatsApp (Wazzup API) ----------------
+        const WAZZUP_API_KEY = process.env.WAZZUP_API_KEY;
+        const WAZZUP_CHANNEL_ID = process.env.WAZZUP_CHANNEL_ID;
+        const TO_NUMBER = process.env.WAZZUP_TO_NUMBER; // свой номер для теста
+
+        if (WAZZUP_API_KEY && WAZZUP_CHANNEL_ID && TO_NUMBER) {
+            try {
+                const waRes = await fetch("https://api.wazzup24.com/v3/message", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${WAZZUP_API_KEY}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        channelId: WAZZUP_CHANNEL_ID,
+                        chatType: "whatsapp",
+                        chatId: TO_NUMBER,
+                        text: processedLead.telegramMessage // можно использовать тот же текст, что для Telegram
+                    })
+                });
+                const waData = await waRes.json();
+                console.log('Уведомление отправлено в WhatsApp:', waData);
+            } catch (waError) {
+                console.error('Ошибка отправки в WhatsApp через Wazzup:', waError);
+            }
+        } else {
+            console.warn('WAZZUP_API_KEY, CHANNEL_ID или TO_NUMBER не настроены');
+        }
+
+         // ---------------- Google Sheets ----------------
+        try {
+            await appendLeadToSheet(formData);
+        } catch (sheetError) {
+            console.error('Ошибка записи в Google Sheets:', sheetError);
+        }
+
+        res.json({ success: true });
+
+        
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: 'Failed to save lead' });
+    }
+});
+
+// -------------------- Логика обработки лида --------------------
 function processLead(leadData) {
-  const { answers, phone } = leadData;
-  
-  const budget = answers['5'];
-  const timeline = answers['6'];
-  
-  let leadStatus;
-  
-  if (
-    (budget === '5-8 млн ₽' || budget === 'Более 8 млн ₽') ||
-    timeline === 'В ближайший месяц'
-  ) {
-    leadStatus = '🔥 ГОРЯЧИЙ';
-  } else if (
-    (budget === '3-5 млн ₽') ||
-    timeline === 'В течение 3-6 месяцев'
-  ) {
-    leadStatus = '👍 ТЕПЛЫЙ';
-  } else {
-    leadStatus = '❄️ ХОЛОДНЫЙ';
-  }
-  
-  const telegramMessage = `
+    const { answers, phone } = leadData;
+    const budget = answers['5'];
+    const timeline = answers['6'];
+
+    let leadStatus;
+
+    if (
+        (budget === '5-8 млн ₽' || budget === 'Более 8 млн ₽') ||
+        timeline === 'В ближайший месяц'
+    ) {
+        leadStatus = '🔥 ГОРЯЧИЙ';
+    } else if (
+        (budget === '3-5 млн ₽') ||
+        timeline === 'В течение 3-6 месяцев'
+    ) {
+        leadStatus = '👍 ТЕПЛЫЙ';
+    } else {
+        leadStatus = '❄️ ХОЛОДНЫЙ';
+    }
+
+    const telegramMessage = `
 📌 *Новый лид (${leadStatus})* 📌
 
-*Контакт:* [${phone}](tel:${phone.replace(/\D/g, '')})
+*Контакт:* [${phone}])
 
 *Ответы на вопросы:*
 1. Для кого: ${answers['1']}
@@ -187,36 +200,31 @@ function processLead(leadData) {
 6. Сроки: ${answers['6']}
 
 *Рекомендации:* ${getActionRecommendation(leadStatus)}
-  `.trim();
-  
-  const clientMessage = leadStatus === '🔥 ГОРЯЧИЙ' 
-    ? 'Здравствуйте! Ваша заявка получила VIP-статус. Наш лучший специалист уже изучает ваши ответы и свяжется с вами в течение 15 минут для детального обсуждения проекта. Ваш персональный каталог и скидка уже формируются! С уважением, команда «Тектоника».'
-    : 'Здравствуйте! Мы получили вашу заявку, спасибо за интерес к нашей компании! Наш менеджер свяжется с вами в ближайшее рабочее время для консультации. А пока мы готовим для вас смету и каталог проектов. С уважением, команда «Тектоника».';
-  
-  return {
-    leadStatus,
-    telegramMessage,
-    clientMessage
-  };
+`.trim();
+
+    return {
+        leadStatus,
+        telegramMessage
+    };
 }
 
 function getActionRecommendation(status) {
-  switch(status) {
-    case '🔥 ГОРЯЧИЙ':
-      return 'Немедленно позвонить! Клиент готов к покупке в ближайшее время с высоким бюджетом.';
-    case '👍 ТЕПЛЫЙ':
-      return 'Позвонить в течение 2 часов. Клиент в среднесрочной перспективе с хорошим бюджетом.';
-    case '❄️ ХОЛОДНЫЙ':
-      return 'Отправить письмо с каталогом и позвонить на следующий день. Клиент на ранней стадии рассмотрения.';
-    default:
-      return 'Требуется дополнительный анализ.';
-  }
+    switch (status) {
+        case '🔥 ГОРЯЧИЙ':
+            return 'Немедленно позвонить! Клиент готов к покупке в ближайшее время с высоким бюджетом.';
+        case '👍 ТЕПЛЫЙ':
+            return 'Позвонить в течение 2 часов. Клиент в среднесрочной перспективе с хорошим бюджетом.';
+        case '❄️ ХОЛОДНЫЙ':
+            return 'Отправить письмо с каталогом и позвонить на следующий день. Клиент на ранней стадии рассмотрения.';
+        default:
+            return 'Требуется дополнительный анализ.';
+    }
 }
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  if (!TELEGRAM_BOT_TOKEN) {
-    console.warn('TELEGRAM_BOT_TOKEN не настроен - уведомления отправляться не будут');
-  }
+    console.log(`Server running on port ${PORT}`);
+    if (!TELEGRAM_BOT_TOKEN) {
+        console.warn('TELEGRAM_BOT_TOKEN не настроен - уведомления отправляться не будут');
+    }
 });
