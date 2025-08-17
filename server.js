@@ -127,32 +127,49 @@ app.post('/api/lead', async (req, res) => {
         // ---------------- WhatsApp (Wazzup API) ----------------
         const WAZZUP_API_KEY = process.env.WAZZUP_API_KEY;
         const WAZZUP_CHANNEL_ID = process.env.WAZZUP_CHANNEL_ID;
-        const TO_NUMBER = process.env.WAZZUP_TO_NUMBER; // свой номер для теста
 
-        if (WAZZUP_API_KEY && WAZZUP_CHANNEL_ID && TO_NUMBER) {
-            try {
-                const waRes = await fetch("https://api.wazzup24.com/v3/message", {
-                    method: "POST",
-                    headers: {
-                        "Authorization": `Bearer ${WAZZUP_API_KEY}`,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        channelId: WAZZUP_CHANNEL_ID,
-                        chatType: "whatsapp",
-                        chatId: TO_NUMBER,
-                        text: processedLead.telegramMessage // можно использовать тот же текст, что для Telegram
-                    })
-                });
-                const waData = await waRes.json();
-                console.log('Уведомление отправлено в WhatsApp:', waData);
-            } catch (waError) {
-                console.error('Ошибка отправки в WhatsApp через Wazzup:', waError);
-            }
-        } else {
-            console.warn('WAZZUP_API_KEY, CHANNEL_ID или TO_NUMBER не настроены');
-        }
 
+// Номер из формы пользователя
+let userPhone = formData.phone; // пример, нужно заменить на req.body.phone или аналог
+// Преобразуем в формат 79993454354
+userPhone = userPhone.replace(/\D/g, ''); // удаляем все кроме цифр
+if (userPhone.startsWith('8')) userPhone = '7' + userPhone.slice(1);
+
+if (WAZZUP_API_KEY && WAZZUP_CHANNEL_ID && userPhone) {
+    try {
+        const waRes = await fetch("https://api.wazzup24.com/v3/message", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${WAZZUP_API_KEY}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                channelId: WAZZUP_CHANNEL_ID,
+                chatType: "whatsapp",
+                phone: userPhone,
+                template: {
+                    name: "Приветствие",  // имя вашего шаблона в Wazzup
+                    language: "ru",
+                    components: [
+                        {
+                            type: "body",
+                            parameters: [
+                                { type: "text", text: "Егор" } // сюда можно подставлять имя пользователя
+                            ]
+                        }
+                    ]
+                }
+            })
+        });
+
+        const waData = await waRes.json();
+        console.log('Шаблонное уведомление отправлено в WhatsApp:', waData);
+    } catch (waError) {
+        console.error('Ошибка отправки шаблона в WhatsApp через Wazzup:', waError);
+    }
+} else {
+    console.warn('WAZZUP_API_KEY, CHANNEL_ID или userPhone не настроены');
+}
          // ---------------- Google Sheets ----------------
         try {
             await appendLeadToSheet(formData);
